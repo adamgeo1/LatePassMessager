@@ -34,11 +34,17 @@ def scrape_spreadsheet(id, sheet):
 
     return result.get('values', [])
 
+def format_date(d: datetime.date) -> str:
+    day = d.day
+    suffix = 'th' if 11 <= day <= 13 else {1: 'st', 2: 'nd', 3: 'rd'}.get(day % 10, 'th')
+    return d.strftime(f'%A %B {day}{suffix}')
+
 def main():
     response_values = scrape_spreadsheet(RESPONSES_ID, RESPONSES_SHEET)
 
-    #yesterday = datetime.date.today() - datetime.timedelta(days=1)
-    yesterday = datetime.date(2025, 5, 24) - datetime.timedelta(days=1)
+    today = datetime.date.today()
+    #yesterday = today - datetime.timedelta(days=1)
+    yesterday = datetime.date(2025, 5, 24) - datetime.timedelta(days=1) # testing purposes
     month_day_str = yesterday.strftime("%B %#d") if platform.system() == 'Windows' else yesterday.strftime("%B %-d")
     pattern = rf'\(due {re.escape(month_day_str)}\)'
 
@@ -56,8 +62,61 @@ def main():
     formatted_late_passes = [
         dict(zip(headers, row))
         for row in late_pass_values[1:]
-        if len(row) == len(headers)
     ]
+
+    '''print("=== Formatted Responses ===")
+    for i, entry in enumerate(formatted_responses, start=1):
+        print(f"Response #{i}:")
+        for key, value in entry.items():
+            print(f"  {key}: {value}")
+        print()
+
+    print("=== Formatted Late Passes ===")
+    for i, entry in enumerate(formatted_late_passes, start=1):
+        print(f"Late Pass #{i}:")
+        for key, value in entry.items():
+            print(f"  {key}: {value}")
+        print()'''
+
+    messages = {}
+
+    for response in formatted_responses:
+        assignment_text = response.get("Choose Homework Assignment", "")
+        match = re.search(r'\bHW(\d+)\b', assignment_text)
+        hw_code = f"HW#{match.group(1)}" if match else "the assignment"
+
+        for student in formatted_late_passes:
+            if response.get("user ID (initials followed by digits, you don't need the \"@drexel.edu\")") == student.get(
+                    "email"):
+                if student.get("P1") and student.get("P2"):
+                    messages[student.get("email")] = (
+                        f"You cannot use a late pass for {hw_code} as you "
+                        f"have already used the 2 given late passes for the course."
+                    )
+                elif student.get("P1") and not student.get("P2"):
+                    messages[student.get("email")] = (
+                        f"You are receiving this email as confirmation of your late "
+                        f"pass usage for {hw_code}. You may now submit "
+                        f"{hw_code} by {format_date(today)} at 11:59 PM with no "
+                        f"late penalty. This was your last late pass for the quarter, "
+                        f"and so any future assignments will be assessed by the "
+                        f"standard -10%/day penalty. Be aware that homework submissions "
+                        f"are no longer accepted after Tuesday nights, regardless of "
+                        f"any late pass use."
+                    )
+                else:
+                    messages[student.get("email")] = (
+                        f"You are receiving this email as confirmation of your late "
+                        f"pass usage for {hw_code}. You may now submit "
+                        f"{hw_code} by {format_date(today)} at 11:59 PM with no "
+                        f"late penalty. You have one late pass remaining, which can be "
+                        f"used again on this assignment, should you wish to take until "
+                        f"Sunday night, or on a future homework. Be aware that homework "
+                        f"submissions are no longer accepted after Tuesday nights, "
+                        f"regardless of any late pass use."
+                    )
+
+
 
 if __name__ == '__main__':
     main()
