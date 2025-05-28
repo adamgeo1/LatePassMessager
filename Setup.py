@@ -2,8 +2,13 @@ import win32com.client
 import os
 import sys
 import datetime
+import argparse
 
-python_exe = sys.executable
+parser = argparse.ArgumentParser()
+parser.add_argument("-python-path", default=sys.executable, help="Path to Python executable")
+args = parser.parse_args()
+
+python_exe = args.python_path
 script_path = os.path.abspath("Main.py")
 
 task_name = "SendLatePassEmails"
