@@ -40,6 +40,13 @@ def format_date(d: datetime.date) -> str:
     suffix = 'th' if 11 <= day <= 13 else {1: 'st', 2: 'nd', 3: 'rd'}.get(day % 10, 'th')
     return d.strftime(f'%A %B {day}{suffix}')
 
+def update_cell(headers, id, sheet, row, col, value):
+    col_letter = chr(ord('A') + headers.index(col))
+    cell_range = f"{sheet}!{col_letter}{row}"
+    service.spreadsheets().values().update(
+        spreadsheetId=id, range=cell_range, valueInputOption="RAW", body={"values": [[value]]}
+    ).execute()
+
 def main():
     response_values = scrape_spreadsheet(RESPONSES_ID, RESPONSES_SHEET)
 
@@ -61,8 +68,8 @@ def main():
 
     headers = late_pass_values[0]
     formatted_late_passes = [
-        dict(zip(headers, row))
-        for row in late_pass_values[1:]
+        {**dict(zip(headers, row)), "_row_index": i + 2}
+        for i, row in enumerate(late_pass_values[1:])
     ]
 
     '''print("=== Formatted Responses ===") # for debugging purposes
@@ -95,6 +102,8 @@ def main():
                         f"have already used the 2 given late passes for the course."
                     )
                 elif student.get("P1") and not student.get("P2"):
+                    student["P2"] = hw_code.lower()
+                    update_cell(headers, LATE_PASSES_ID, LATE_PASSES_SHEET, student.get("_row_index"), "P2", hw_code.lower())
                     messages[student.get("email")] = (
                         f"You are receiving this email as confirmation of your late "
                         f"pass usage for {hw_code}. You may now submit "
@@ -106,6 +115,8 @@ def main():
                         f"any late pass use."
                     )
                 else:
+                    student["P1"] = hw_code.lower()
+                    update_cell(headers, LATE_PASSES_ID, LATE_PASSES_SHEET, student.get("_row_index"), "P1", hw_code.lower())
                     messages[student.get("email")] = (
                         f"You are receiving this email as confirmation of your late "
                         f"pass usage for {hw_code}. You may now submit "
