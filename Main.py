@@ -2,12 +2,11 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 import datetime
 import re
-import platform
 from dotenv import load_dotenv
 import os
 import win32com.client
 
-load_dotenv()
+load_dotenv() # loads .env file
 
 # Path to your service account key
 SERVICE_ACCOUNT_FILE = os.getenv('GOOGLE_CREDS_PATH')
@@ -22,9 +21,9 @@ creds = service_account.Credentials.from_service_account_file(
 
 service = build('sheets', 'v4', credentials=creds)
 
-RESPONSES_ID = os.getenv('RESPONSES_ID')
+RESPONSES_ID = os.getenv('RESPONSES_ID') # google form speadsheet ID (between d/ and /edit in the URL
 RESPONSES_SHEET = 'Form Responses 1'
-LATE_PASSES_ID = os.getenv('LATE_PASSES_ID')
+LATE_PASSES_ID = os.getenv('LATE_PASSES_ID') # google sheet late pass usage ID (between d/ and /edit in the URL)
 LATE_PASSES_SHEET = 'roster'
 LATE_PASSES_MESSAGE = 'message'
 
@@ -65,7 +64,7 @@ def main():
         for row in late_pass_values[1:]
     ]
 
-    '''print("=== Formatted Responses ===")
+    '''print("=== Formatted Responses ===") # for debugging purposes
     for i, entry in enumerate(formatted_responses, start=1):
         print(f"Response #{i}:")
         for key, value in entry.items():
@@ -83,7 +82,7 @@ def main():
 
     for response in formatted_responses:
         assignment_text = response.get("Choose Homework Assignment", "")
-        match = re.search(r'\bHW(\d+)\b', assignment_text)
+        match = re.search(r'\bHW(\d+)\b', assignment_text) # gets hw code
         hw_code = f"HW#{match.group(1)}" if match else "the assignment"
 
         for student in formatted_late_passes:
@@ -117,15 +116,15 @@ def main():
                         f"regardless of any late pass use."
                     )
 
-    outlook = win32com.client.Dispatch("Outlook.Application")
-    '''for user_id, content in messages.items():
+    outlook = win32com.client.Dispatch("Outlook.Application") # uses existing Outlook session on user's PC
+    for user_id, content in messages.items():
         email = f"{user_id}@drexel.edu"
         mail = outlook.CreateItem(0)
         mail.To = email
         mail.Subject = "Late Pass Usage Confirmation"
         mail.Body = content
         mail.Send()
-        print(f"Email sent to {email}")'''
+        print(f"Email sent to {email}")
 
 if __name__ == '__main__':
     main()
