@@ -5,6 +5,7 @@ import re
 import platform
 from dotenv import load_dotenv
 import os
+import win32com.client
 
 load_dotenv()
 
@@ -45,7 +46,7 @@ def main():
     today = datetime.date.today()
     #yesterday = today - datetime.timedelta(days=1)
     yesterday = datetime.date(2025, 5, 24) - datetime.timedelta(days=1) # testing purposes
-    month_day_str = yesterday.strftime("%B %#d") if platform.system() == 'Windows' else yesterday.strftime("%B %-d")
+    month_day_str = yesterday.strftime("%B %#d")
     pattern = rf'\(due {re.escape(month_day_str)}\)'
 
     headers = response_values[0]
@@ -116,7 +117,15 @@ def main():
                         f"regardless of any late pass use."
                     )
 
-
+    outlook = win32com.client.Dispatch("Outlook.Application")
+    '''for user_id, content in messages.items():
+        email = f"{user_id}@drexel.edu"
+        mail = outlook.CreateItem(0)
+        mail.To = email
+        mail.Subject = "Late Pass Usage Confirmation"
+        mail.Body = content
+        mail.Send()
+        print(f"Email sent to {email}")'''
 
 if __name__ == '__main__':
     main()
