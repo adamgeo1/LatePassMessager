@@ -5,6 +5,7 @@ import re
 from dotenv import load_dotenv
 import os
 import win32com.client
+import platform
 
 load_dotenv() # loads .env file
 
@@ -45,7 +46,7 @@ def main():
     today = datetime.date.today()
     #yesterday = today - datetime.timedelta(days=1)
     yesterday = datetime.date(2025, 5, 24) - datetime.timedelta(days=1) # testing purposes
-    month_day_str = yesterday.strftime("%B %#d")
+    month_day_str = yesterday.strftime("%B %#d") if platform.system() == "Windows" else yesterday.strftime("%B %-d")
     pattern = rf'\(due {re.escape(month_day_str)}\)'
 
     headers = response_values[0]
