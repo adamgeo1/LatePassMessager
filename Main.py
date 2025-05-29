@@ -22,9 +22,11 @@ creds = service_account.Credentials.from_service_account_file(
 
 service = build('sheets', 'v4', credentials=creds)
 
-RESPONSES_ID = os.getenv('RESPONSES_ID') # google form speadsheet ID (between d/ and /edit in the URL
+#RESPONSES_ID = os.getenv('RESPONSES_ID') # google form speadsheet ID (between d/ and /edit in the URL
+RESPONSES_ID = '1R2trVEDz_KMS0skGz0hFTC5VfdnKL29ws4EGbbaBZU8'
 RESPONSES_SHEET = 'Form Responses 1'
-LATE_PASSES_ID = os.getenv('LATE_PASSES_ID') # google sheet late pass usage ID (between d/ and /edit in the URL)
+#LATE_PASSES_ID = os.getenv('LATE_PASSES_ID') # google sheet late pass usage ID (between d/ and /edit in the URL)
+LATE_PASSES_ID = '1vgPZvjSa7nNxLx9N_28qnzO47VG0bVa5FbyQJFjTLX4'
 LATE_PASSES_SHEET = 'roster'
 LATE_PASSES_MESSAGE = 'message'
 
@@ -91,23 +93,32 @@ def main():
     for response in formatted_responses:
         assignment_text = response.get("Choose Homework Assignment", "")
         match = re.search(r'\bHW(\d+)\b', assignment_text) # gets hw code
-        hw_code = f"HW#{match.group(1)}" if match else "the assignment"
+        hw_num = match.group(1) if match else None
+        hw_code = f"HW{hw_num}" if hw_num else "the assignment"
+        hw_code_with_hash = f"HW#{hw_num}" if hw_num else "the assignment"
 
         for student in formatted_late_passes:
             if response.get("user ID (initials followed by digits, you don't need the \"@drexel.edu\")") == student.get(
                     "email"):
+
+                email = student.get("email")
+                subject = "Late Pass Usage Confirmation"
+
                 if student.get("P1") and student.get("P2"):
-                    messages[student.get("email")] = (
-                        f"You cannot use a late pass for {hw_code} as you "
-                        f"have already used the 2 given late passes for the course."
+                    subject = "Late Pass Usage Error"
+                    body = (
+                        f"We have on record that you have already used your two given late passes on assignments "
+                        f"{student.get("P1").upper()} and {student.get("P2").upper()}, therefore "
+                        f"there are none remaining. Please speak to your instructor if "
+                        f"you believe this is in error."
                     )
                 elif student.get("P1") and not student.get("P2"):
                     student["P2"] = hw_code.lower()
                     update_cell(headers, LATE_PASSES_ID, LATE_PASSES_SHEET, student.get("_row_index"), "P2", hw_code.lower())
-                    messages[student.get("email")] = (
+                    body = (
                         f"You are receiving this email as confirmation of your late "
-                        f"pass usage for {hw_code}. You may now submit "
-                        f"{hw_code} by {format_date(today)} at 11:59 PM with no "
+                        f"pass usage for {hw_code_with_hash}. You may now submit "
+                        f"{hw_code_with_hash} by {format_date(today)} at 11:59 PM with no "
                         f"late penalty. This was your last late pass for the quarter, "
                         f"and so any future assignments will be assessed by the "
                         f"standard -10%/day penalty. Be aware that homework submissions "
@@ -117,10 +128,10 @@ def main():
                 else:
                     student["P1"] = hw_code.lower()
                     update_cell(headers, LATE_PASSES_ID, LATE_PASSES_SHEET, student.get("_row_index"), "P1", hw_code.lower())
-                    messages[student.get("email")] = (
+                    body = (
                         f"You are receiving this email as confirmation of your late "
-                        f"pass usage for {hw_code}. You may now submit "
-                        f"{hw_code} by {format_date(today)} at 11:59 PM with no "
+                        f"pass usage for {hw_code_with_hash}. You may now submit "
+                        f"{hw_code_with_hash} by {format_date(today)} at 11:59 PM with no "
                         f"late penalty. You have one late pass remaining, which can be "
                         f"used again on this assignment, should you wish to take until "
                         f"Sunday night, or on a future homework. Be aware that homework "
@@ -128,15 +139,27 @@ def main():
                         f"regardless of any late pass use."
                     )
 
+                messages[email] = (subject, body)
+
+    receipt = []
+
     outlook = win32com.client.Dispatch("Outlook.Application") # uses existing Outlook session on user's PC
-    for user_id, content in messages.items():
+    for user_id, (subject, content) in messages.items():
         email = f"{user_id}@drexel.edu"
         mail = outlook.CreateItem(0)
         mail.To = email
-        mail.Subject = "Late Pass Usage Confirmation"
+        mail.Subject = subject
         mail.Body = content
         mail.Send()
         print(f"Email sent to {email}")
+        receipt.append(f"{email}: {subject}")
+
+    receipt_mail = outlook.CreateItem(0)
+    receipt_mail.To = outlook.Session.CurrentUser.Address
+    receipt_mail.Subject = f"Late Pass Receipt for {today.strftime('%B %d, %Y')}"
+    receipt_mail.Body = "Late pass confirmation/denial emails were sent to the following:\n\n" + "\n".join(receipt)
+    receipt_mail.Send()
+    print("Receipt email sent")
 
 if __name__ == '__main__':
     main()

@@ -13,6 +13,7 @@ script_path = os.path.abspath("Main.py")
 
 task_name = "SendLatePassEmails"
 start_time = (datetime.datetime.now() + datetime.timedelta(days=1)).replace(hour=0, minute=1, second=0, microsecond=0)
+#start_time = datetime.datetime.now() + datetime.timedelta(minutes=1)
 
 scheduler = win32com.client.Dispatch("Schedule.Service")
 scheduler.Connect()
@@ -28,13 +29,14 @@ task_def.Settings.RunOnlyIfNetworkAvailable = True
 
 trigger = task_def.Triggers.Create(3)
 trigger.StartBoundary = start_time.strftime("%Y-%m-%dT%H:%M:%S")
-trigger.DaysOfWeek = 1
+trigger.DaysOfWeek = 64
 trigger.WeeksInterval = 1
 trigger.Enabled = True
 
 action = task_def.Actions.Create(0)
 action.Path = python_exe
 action.Arguments = f'"{script_path}"'
+action.WorkingDirectory = os.path.dirname(script_path)
 
 task_def.Principal.RunLevel = 1
 
