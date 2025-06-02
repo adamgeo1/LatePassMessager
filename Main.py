@@ -49,20 +49,47 @@ def update_cell(headers, id, sheet, row, col, value):
 
 def main():
     response_values = scrape_spreadsheet(RESPONSES_ID, RESPONSES_SHEET)
+    late_pass_values = scrape_spreadsheet(LATE_PASSES_ID, LATE_PASSES_SHEET)
 
     today = datetime.date.today()
-    #yesterday = today - datetime.timedelta(days=1)
-    yesterday = datetime.date(2025, 5, 24) - datetime.timedelta(days=1) # testing purposes
+    # yesterday = today - datetime.timedelta(days=1)
+    yesterday = datetime.date(2025, 5, 24) - datetime.timedelta(days=1)  # testing
     month_day_str = yesterday.strftime("%B %#d") if platform.system() == "Windows" else yesterday.strftime("%B %-d")
     pattern = rf'\(due {re.escape(month_day_str)}\)'
 
-    headers = response_values[0]
+    response_headers = response_values[0]
     assignment_column = 'Choose Homework Assignment'
     formatted_responses = [
-        dict(zip(headers, row))
+        dict(zip(response_headers, row))
         for row in response_values[1:]
-        if len(row) == len(headers) and re.search(pattern, row[headers.index(assignment_column)], re.IGNORECASE)
+        if len(row) == len(response_headers) and re.search(pattern, row[response_headers.index(assignment_column)],
+                                                           re.IGNORECASE)
     ]
+
+    if not formatted_responses:
+        print("No responses for yesterday's due date.")
+        return
+
+    # Step 1: Get HW number from first matching response
+    first_assignment = formatted_responses[0].get("Choose Homework Assignment", "")
+    current_hw_match = re.search(r'\bhw(\d+)\b', first_assignment, re.IGNORECASE)
+    if not current_hw_match:
+        print("Could not extract HW number from yesterday's assignment.")
+        return
+    current_hw = current_hw_match.group(1)
+
+    # Step 2: Search second row of late pass sheet for "last email: hw{num}"
+    last_email_hw = None
+    for cell in late_pass_values[1]:  # second row
+        match = re.search(r'last email:\s*hw(\d+)', cell, re.IGNORECASE)
+        if match:
+            last_email_hw = match.group(1)
+            break
+
+    # Step 3: Skip if already sent
+    if last_email_hw == current_hw:
+        print(f"Emails already sent for HW{current_hw}. Skipping main().")
+        return
 
     late_pass_values = scrape_spreadsheet(LATE_PASSES_ID, LATE_PASSES_SHEET)
 
@@ -143,7 +170,12 @@ def main():
 
     outlook = win32com.client.Dispatch("Outlook.Application") # uses existing Outlook session on user's PC
     for user_id, (subject, content) in messages.items():
-        email = f"{user_id}@drexel.edu"
+        if user_id == "steve.earth":
+            email = f"{user_id}@gmail.com"
+        elif user_id == "mboady":
+            email = "steve.loves.math@gmail.com"
+        else:
+            email = f"{user_id}@drexel.edu"
         mail = outlook.CreateItem(0)
         mail.To = email
         mail.Subject = subject
