@@ -23,10 +23,8 @@ creds = service_account.Credentials.from_service_account_file(
 service = build('sheets', 'v4', credentials=creds)
 
 #RESPONSES_ID = os.getenv('RESPONSES_ID') # google form speadsheet ID (between d/ and /edit in the URL
-RESPONSES_ID = '1R2trVEDz_KMS0skGz0hFTC5VfdnKL29ws4EGbbaBZU8'
 RESPONSES_SHEET = 'Form Responses 1'
 #LATE_PASSES_ID = os.getenv('LATE_PASSES_ID') # google sheet late pass usage ID (between d/ and /edit in the URL)
-LATE_PASSES_ID = '1vgPZvjSa7nNxLx9N_28qnzO47VG0bVa5FbyQJFjTLX4'
 LATE_PASSES_SHEET = 'roster'
 LATE_PASSES_MESSAGE = 'message'
 
