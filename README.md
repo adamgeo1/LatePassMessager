@@ -18,7 +18,7 @@ pip install -r requirements.txt
 - Google Cloud credentials file (must be given)
 
 ## Usage/Setup
->⚠️ Must be ran on Windows to automate, can be ran manually on Unix
+>⚠️ On Windows, `Setup.py` must be ran as administrator, or will not successfully create weekly task
 1. Run `Setup.py` to create scheduled task to run `Main.py` every Saturday at `12:01 AM`
 2. Create (or be given) `.env` file with Google sheets ids (string between `/d/` and `/edit` within URL) and Google Cloud credentials JSON
 
