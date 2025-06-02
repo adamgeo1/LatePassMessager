@@ -52,9 +52,9 @@ def main():
     late_pass_values = scrape_spreadsheet(LATE_PASSES_ID, LATE_PASSES_SHEET)
 
     today = datetime.date.today()
-    # yesterday = today - datetime.timedelta(days=1)
-    yesterday = datetime.date(2025, 5, 24) - datetime.timedelta(days=1)  # testing
-    month_day_str = yesterday.strftime("%B %#d") if platform.system() == "Windows" else yesterday.strftime("%B %-d")
+    last_saturday = today - datetime.timedelta(days=(today.weekday() - 5) % 7)
+    month_day_str = last_saturday.strftime("%B %#d") if platform.system() == "Windows" else last_saturday.strftime(
+        "%B %-d")
     pattern = rf'\(due {re.escape(month_day_str)}\)'
 
     response_headers = response_values[0]
@@ -190,6 +190,8 @@ def main():
     receipt_mail.Body = "Late pass confirmation/denial emails were sent to the following:\n\n" + "\n".join(receipt)
     receipt_mail.Send()
     print("Receipt email sent")
+
+    update_cell(headers, LATE_PASSES_ID, LATE_PASSES_SHEET, 2, "other notes", f"last email: {hw_code.lower()}")
 
 if __name__ == '__main__':
     main()
