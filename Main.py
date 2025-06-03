@@ -53,6 +53,9 @@ def update_cell(headers, id, sheet, row, col, value):
     ).execute()
 
 def main():
+    if args.test:
+        print("Testing Mode")
+
     response_values = scrape_spreadsheet(RESPONSES_ID, RESPONSES_SHEET)
     late_pass_values = scrape_spreadsheet(LATE_PASSES_ID, LATE_PASSES_SHEET)
 

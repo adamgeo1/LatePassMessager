@@ -82,6 +82,9 @@ def main():
     parser.add_argument("--test", action="store_true", default=False, help="Schedule Main.py to run 1 minute from Script.py run")
     args = parser.parse_args()
 
+    if args.test:
+        print("Testing Mode")
+
     python_exe = args.python_path
     script_path = os.path.abspath("Main.py")
 
