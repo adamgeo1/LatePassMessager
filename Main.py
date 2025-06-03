@@ -6,6 +6,11 @@ from dotenv import load_dotenv
 import os
 import win32com.client
 import platform
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--test", action="store_true", default=False, help="Sets script to testing mode, uses test Google Sheets")
+args = parser.parse_args()
 
 load_dotenv() # loads .env file
 
@@ -22,9 +27,9 @@ creds = service_account.Credentials.from_service_account_file(
 
 service = build('sheets', 'v4', credentials=creds)
 
-#RESPONSES_ID = os.getenv('RESPONSES_ID') # google form speadsheet ID (between d/ and /edit in the URL
+RESPONSES_ID = os.getenv('RESPONSES_ID') if not args.test else os.getenv('TEST_RESPONSES_ID') # google form speadsheet ID (between d/ and /edit in the URL
 RESPONSES_SHEET = 'Form Responses 1'
-#LATE_PASSES_ID = os.getenv('LATE_PASSES_ID') # google sheet late pass usage ID (between d/ and /edit in the URL)
+LATE_PASSES_ID = os.getenv('LATE_PASSES_ID') if not args.test else os.getenv('TEST_LATE_PASSES_ID') # google sheet late pass usage ID (between d/ and /edit in the URL)
 LATE_PASSES_SHEET = 'roster'
 LATE_PASSES_MESSAGE = 'message'
 
@@ -52,8 +57,8 @@ def main():
     late_pass_values = scrape_spreadsheet(LATE_PASSES_ID, LATE_PASSES_SHEET)
 
     today = datetime.date.today()
-    last_saturday = today - datetime.timedelta(days=(today.weekday() - 5) % 7)
-    month_day_str = last_saturday.strftime("%B %#d") if platform.system() == "Windows" else last_saturday.strftime(
+    last_friday = today - datetime.timedelta(days=(today.weekday() - 4) % 7)
+    month_day_str = last_friday.strftime("%B %#d") if platform.system() == "Windows" else last_friday.strftime(
         "%B %-d")
     pattern = rf'\(due {re.escape(month_day_str)}\)'
 
@@ -168,7 +173,8 @@ def main():
 
     receipt = []
 
-    outlook = win32com.client.Dispatch("Outlook.Application") # uses existing Outlook session on user's PC
+    if platform.system() == "Windows":
+        outlook = win32com.client.Dispatch("Outlook.Application") # uses existing Outlook session on user's PC
     for user_id, (subject, content) in messages.items():
         if user_id == "steve.earth":
             email = f"{user_id}@gmail.com"
@@ -176,11 +182,16 @@ def main():
             email = "steve.loves.math@gmail.com"
         else:
             email = f"{user_id}@drexel.edu"
-        mail = outlook.CreateItem(0)
-        mail.To = email
-        mail.Subject = subject
-        mail.Body = content
-        mail.Send()
+        if platform.system() == "Windows":
+            mail = outlook.CreateItem(0)
+            mail.To = email
+            mail.Subject = subject
+            mail.Body = content
+            mail.Send()
+        else:
+            print(f"Email would be sent to {email} with:")
+            print(f"\tSubject: {subject}")
+            print(f"\tBody: {content}")
         print(f"Email sent to {email}")
         receipt.append(f"{email}: {subject}")
 
