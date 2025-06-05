@@ -7,6 +7,7 @@ import os
 import win32com.client
 import platform
 import argparse
+from collections import defaultdict
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--test", action="store_true", default=False, help="Sets script to testing mode, uses test Google Sheets")
@@ -78,6 +79,11 @@ def main():
         print("No responses for yesterday's due date.")
         return
 
+    grouped_responses = defaultdict(list)
+    for r in formatted_responses:
+        user = r.get("user ID (initials followed by digits, you don't need the \"@drexel.edu\")")
+        grouped_responses[user].append(r)
+
     # Step 1: Get HW number from first matching response
     first_assignment = formatted_responses[0].get("Choose Homework Assignment", "")
     current_hw_match = re.search(r'\bhw(\d+)\b', first_assignment, re.IGNORECASE)
@@ -123,56 +129,79 @@ def main():
 
     messages = {}
 
-    for response in formatted_responses:
-        assignment_text = response.get("Choose Homework Assignment", "")
-        match = re.search(r'\bHW(\d+)\b', assignment_text) # gets hw code
+    for user_email, responses in grouped_responses.items():
+        student = next((s for s in formatted_late_passes if s.get("email") == user_email), None)
+        if not student:
+            continue
+
+        assignments = [r.get("Choose Homework Assignment", "") for r in responses]
+        assignment_counts = defaultdict(int)
+        for a in assignments:
+            assignment_counts[a] += 1
+
+        assignment_text = assignments[0]
+        is_duplicate = assignment_counts[assignment_text] > 1
+
+        match = re.search(r'\bHW(\d+)\b', assignment_text)
         hw_num = match.group(1) if match else None
         hw_code = f"HW{hw_num}" if hw_num else "the assignment"
         hw_code_with_hash = f"HW#{hw_num}" if hw_num else "the assignment"
 
-        for student in formatted_late_passes:
-            if response.get("user ID (initials followed by digits, you don't need the \"@drexel.edu\")") == student.get(
-                    "email"):
+        email = student.get("email")
+        subject = "Late Pass Usage Confirmation"
+        due_date = today + datetime.timedelta(days=1) if is_duplicate else today
 
-                email = student.get("email")
-                subject = "Late Pass Usage Confirmation"
+        p1 = student.get("P1")
+        p2 = student.get("P2")
 
-                if student.get("P1") and student.get("P2"):
-                    subject = "Late Pass Usage Error"
-                    body = (
-                        f"We have on record that you have already used your two given late passes on assignments "
-                        f"{student.get("P1").upper()} and {student.get("P2").upper()}, therefore "
-                        f"there are none remaining. Please speak to your instructor if "
-                        f"you believe this is in error."
-                    )
-                elif student.get("P1") and not student.get("P2"):
-                    student["P2"] = hw_code.lower()
-                    update_cell(headers, LATE_PASSES_ID, LATE_PASSES_SHEET, student.get("_row_index"), "P2", hw_code.lower())
-                    body = (
-                        f"You are receiving this email as confirmation of your late "
-                        f"pass usage for {hw_code_with_hash}. You may now submit "
-                        f"{hw_code_with_hash} by {format_date(today)} at 11:59 PM with no "
-                        f"late penalty. This was your last late pass for the quarter, "
-                        f"and so any future assignments will be assessed by the "
-                        f"standard -10%/day penalty. Be aware that homework submissions "
-                        f"are no longer accepted after Tuesday nights, regardless of "
-                        f"any late pass use."
-                    )
-                else:
-                    student["P1"] = hw_code.lower()
-                    update_cell(headers, LATE_PASSES_ID, LATE_PASSES_SHEET, student.get("_row_index"), "P1", hw_code.lower())
-                    body = (
-                        f"You are receiving this email as confirmation of your late "
-                        f"pass usage for {hw_code_with_hash}. You may now submit "
-                        f"{hw_code_with_hash} by {format_date(today)} at 11:59 PM with no "
-                        f"late penalty. You have one late pass remaining, which can be "
-                        f"used again on this assignment, should you wish to take until "
-                        f"Sunday night, or on a future homework. Be aware that homework "
-                        f"submissions are no longer accepted after Tuesday nights, "
-                        f"regardless of any late pass use."
-                    )
+        if p1 and p2:
+            subject = "Late Pass Usage Error"
+            body = (
+                f"We have on record that you have already used your two given late passes on assignments "
+                f"{p1.upper()} and {p2.upper()}, therefore there are none remaining. Please speak to your instructor if "
+                f"you believe this is in error."
+            )
+        elif p1 and not p2:
+            student["P2"] = hw_code.lower()
+            update_cell(headers, LATE_PASSES_ID, LATE_PASSES_SHEET, student.get("_row_index"), "P2", hw_code.lower())
+            if is_duplicate:
+                body = (
+                    f"You are receiving this email as confirmation of your late pass usage for {hw_code_with_hash}.\n\n"
+                    f"You have attempted to use 2 late passes on this assignment, however you only had 1 available, "
+                    f"so you have only received a single-day extension on the assignment. If you believe this is in "
+                    f"error, please contact your instructor.\n\nYou may now submit {hw_code_with_hash} by "
+                    f"{format_date(today)} at 11:59 PM with no late penalty. This was your last late pass for the "
+                    f"quarter, and so any future assignments will be assessed by the standard -10%/day penalty. Be "
+                    f"aware that homework submissions are no longer accepted after Tuesday nights, regardless of any "
+                    f"late pass use."
+                )
+            else:
+                body = (
+                    f"You are receiving this email as confirmation of your late pass usage for {hw_code_with_hash}. You may now submit "
+                    f"{hw_code_with_hash} by {format_date(due_date)} at 11:59 PM with no late penalty. This was your last late pass for the "
+                    f"quarter, and so any future assignments will be assessed by the standard -10%/day penalty. Be aware that homework submissions "
+                    f"are no longer accepted after Tuesday nights, regardless of any late pass use."
+                )
+        else:
+            student["P1"] = hw_code.lower()
+            update_cell(headers, LATE_PASSES_ID, LATE_PASSES_SHEET, student.get("_row_index"), "P1", hw_code.lower())
+            if is_duplicate:
+                body = (
+                    f"You are receiving this email as confirmation of your late pass usage for {hw_code_with_hash}.\n\n"
+                    f"You have used both of your late passes for the quarter on this assignment. If you believe this is in error, please contact your instructor.\n\n"
+                    f"You may now submit {hw_code_with_hash} by {format_date(due_date)} at 11:59 PM with no late penalty. This was your last late pass for the "
+                    f"quarter, and so any future assignments will be assessed by the standard -10%/day penalty. Be aware that homework submissions "
+                    f"are no longer accepted after Tuesday nights, regardless of any late pass use."
+                )
+            else:
+                body = (
+                    f"You are receiving this email as confirmation of your late pass usage for {hw_code_with_hash}. You may now submit "
+                    f"{hw_code_with_hash} by {format_date(due_date)} at 11:59 PM with no late penalty. You have one late pass remaining, which can be "
+                    f"used again on this assignment, should you wish to take until Sunday night, or on a future homework. Be aware that homework "
+                    f"submissions are no longer accepted after Tuesday nights, regardless of any late pass use."
+                )
 
-                messages[email] = (subject, body)
+        messages[email] = (subject, body)
 
     receipt = []
 
