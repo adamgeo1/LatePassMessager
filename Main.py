@@ -8,6 +8,7 @@ import win32com.client
 import platform
 import argparse
 from collections import defaultdict
+import copy
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--test", action="store_true", default=False, help="Sets script to testing mode, uses test Google Sheets")
@@ -47,19 +48,39 @@ def format_date(d: datetime.date) -> str:
     return d.strftime(f'%A %B {day}{suffix}')
 
 def update_cell(headers, id, sheet, row, col, value):
+    if args.test:
+        print(f"[TEST MODE] Would update {sheet}!{col} at row {row} with: {value}")
+        return
     col_letter = chr(ord('A') + headers.index(col))
     cell_range = f"{sheet}!{col_letter}{row}"
     service.spreadsheets().values().update(
         spreadsheetId=id, range=cell_range, valueInputOption="RAW", body={"values": [[value]]}
     ).execute()
 
-def main():
-    if args.test:
-        print("Testing Mode")
 
-    response_values = scrape_spreadsheet(RESPONSES_ID, RESPONSES_SHEET)
-    late_pass_values = scrape_spreadsheet(LATE_PASSES_ID, LATE_PASSES_SHEET)
+def split_by_blank_rows(data):
+    blocks = []
+    current = []
+    row_indices = []
+    current_start = 1
+    for i, row in enumerate(data[1:], start=2):
+        if all(cell.strip() == "" for cell in row):
+            if current:
+                blocks.append(current)
+                row_indices.append(current_start)
+                current = []
+            current_start = i + 1
+        else:
+            if not current:
+                current_start = i
+            current.append(row)
+    if current:
+        blocks.append(current)
+        row_indices.append(current_start)
+    return data, blocks, row_indices
 
+
+def run_main_logic(response_values, late_pass_values, note_row=2):
     today = datetime.date.today()
     last_friday = today - datetime.timedelta(days=(today.weekday() - 4) % 7)
     month_day_str = last_friday.strftime("%B %#d") if platform.system() == "Windows" else last_friday.strftime(
@@ -68,12 +89,15 @@ def main():
 
     response_headers = response_values[0]
     assignment_column = 'Choose Homework Assignment'
-    formatted_responses = [
-        dict(zip(response_headers, row))
-        for row in response_values[1:]
-        if len(row) == len(response_headers) and re.search(pattern, row[response_headers.index(assignment_column)],
-                                                           re.IGNORECASE)
-    ]
+    formatted_responses = []
+    assignment_idx = response_headers.index(assignment_column)
+
+    for row in response_values[1:]:  # pads empty rows and cells because of test description column
+        if len(row) < len(response_headers):
+            row += [""] * (len(response_headers) - len(row))
+
+        if re.search(pattern, row[assignment_idx], re.IGNORECASE):
+            formatted_responses.append(dict(zip(response_headers, row)))
 
     if not formatted_responses:
         print("No responses for yesterday's due date.")
@@ -105,13 +129,15 @@ def main():
         print(f"Emails already sent for HW{current_hw}. Skipping main().")
         return
 
-    late_pass_values = scrape_spreadsheet(LATE_PASSES_ID, LATE_PASSES_SHEET)
+    # late_pass_values = scrape_spreadsheet(LATE_PASSES_ID, LATE_PASSES_SHEET)
 
     headers = late_pass_values[0]
     formatted_late_passes = [
         {**dict(zip(headers, row)), "_row_index": i + 2}
         for i, row in enumerate(late_pass_values[1:])
     ]
+    if args.test:
+        formatted_late_passes = copy.deepcopy(formatted_late_passes)
 
     '''print("=== Formatted Responses ===") # for debugging purposes
     for i, entry in enumerate(formatted_responses, start=1):
@@ -154,7 +180,7 @@ def main():
         p1 = student.get("P1")
         p2 = student.get("P2")
 
-        if p1 and p2:
+        if p1.strip() and p2.strip():
             subject = "Late Pass Usage Error"
             body = (
                 f"We have on record that you have already used your two given late passes on assignments "
@@ -200,13 +226,15 @@ def main():
                     f"used again on this assignment, should you wish to take until Sunday night, or on a future homework. Be aware that homework "
                     f"submissions are no longer accepted after Tuesday nights, regardless of any late pass use."
                 )
+        if args.test and "Test Case Description" in student and student["Test Case Description"].strip():
+            subject += f" - [Test: {student['Test Case Description'].strip()}]"
 
         messages[email] = (subject, body)
 
     receipt = []
 
     if platform.system() == "Windows":
-        outlook = win32com.client.Dispatch("Outlook.Application") # uses existing Outlook session on user's PC
+        outlook = win32com.client.Dispatch("Outlook.Application")  # uses existing Outlook session on user's PC
     for user_id, (subject, content) in messages.items():
         if user_id == "steve.earth":
             email = f"{user_id}@gmail.com"
@@ -234,7 +262,33 @@ def main():
     receipt_mail.Send()
     print("Receipt email sent")
 
-    update_cell(headers, LATE_PASSES_ID, LATE_PASSES_SHEET, 2, "other notes", f"last email: {hw_code.lower()}")
+    if 'hw_code' in locals():
+        update_cell(headers, LATE_PASSES_ID, LATE_PASSES_SHEET, note_row, "other notes",
+                    f"last email: {hw_code.lower()}")
+
+
+def main():
+    if args.test:
+        print("Testing Mode")
+
+        full_data, response_blocks, _ = split_by_blank_rows(scrape_spreadsheet(RESPONSES_ID, RESPONSES_SHEET))
+        resp_header = full_data[0]
+        full_lp_data, late_pass_blocks, note_rows = split_by_blank_rows(scrape_spreadsheet(LATE_PASSES_ID,
+                                                                                           LATE_PASSES_SHEET))
+        lp_header = full_lp_data[0]
+        if len(response_blocks) != len(late_pass_blocks):
+            print("Mismatch in test case block count. Check your test sheets.")
+            return
+        for i, (resp_block, lp_block, note_row) in enumerate(zip(response_blocks, late_pass_blocks, note_rows),
+                                                             start=1):
+            print(f"\n=== Running Test Case #{i} ===")
+            run_main_logic([resp_header] + resp_block, [lp_header] + lp_block, note_row)
+
+    else:
+        response_values = scrape_spreadsheet(RESPONSES_ID, RESPONSES_SHEET)
+        late_pass_values = scrape_spreadsheet(LATE_PASSES_ID, LATE_PASSES_SHEET)
+        run_main_logic(response_values, late_pass_values)
+
 
 if __name__ == '__main__':
     main()

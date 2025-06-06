@@ -16,7 +16,7 @@ def main():
     args = parser.parse_args()
 
     if args.setup:
-        new_keys = ["RESPONSES_ID", "LATE_PASSES_ID", "GOOGLE_CREDS_ID", "TEST_RESPONSES_ID", "TEST_LATE_PASSES_ID"]
+        new_keys = ["RESPONSES_ID", "LATE_PASSES_ID", "TEST_RESPONSES_ID", "TEST_LATE_PASSES_ID", "GOOGLE_CREDS_ID"]
         existing = {}
 
         try:
