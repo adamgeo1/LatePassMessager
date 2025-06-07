@@ -94,16 +94,18 @@ def main():
         task_def.Settings.DisallowStartIfOnBatteries = False
         task_def.Settings.RunOnlyIfNetworkAvailable = True
 
-        trigger = task_def.Triggers.Create(3 if not args.test else 1)
-        trigger.StartBoundary = start_time.strftime("%Y-%m-%dT%H:%M:%S")
         if args.test:
-            trigger.DaysOfWeek = 64
+            trigger = task_def.Triggers.Create(1)  # One time trigger
+        else:
+            trigger = task_def.Triggers.Create(3)  # Weekly trigger
+            trigger.DaysOfWeek = 64  # Saturday
             trigger.WeeksInterval = 1
+        trigger.StartBoundary = start_time.strftime("%Y-%m-%dT%H:%M:%S")
         trigger.Enabled = True
 
         action = task_def.Actions.Create(0)
         action.Path = python_exe
-        action.Arguments = f'"{script_path} --test"'
+        action.Arguments = f'"{script_path}"' if not args.test else f'"{script_path} --test"'
         action.WorkingDirectory = os.path.dirname(script_path)
 
         task_def.Principal.RunLevel = 1
