@@ -10,10 +10,11 @@ import argparse
 from collections import defaultdict
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--test", action="store_true", default=False, help="Sets script to testing mode, uses test Google Sheets")
+parser.add_argument("--test", action="store_true", default=False,
+                    help="Sets script to testing mode, uses test Google Sheets")
 args = parser.parse_args()
 
-load_dotenv() # loads .env file
+load_dotenv()  # loads .env file
 
 # Path to your service account key
 SERVICE_ACCOUNT_FILE = os.getenv('GOOGLE_CREDS_PATH')
@@ -28,11 +29,14 @@ creds = service_account.Credentials.from_service_account_file(
 
 service = build('sheets', 'v4', credentials=creds)
 
-RESPONSES_ID = os.getenv('RESPONSES_ID') if not args.test else os.getenv('TEST_RESPONSES_ID') # google form speadsheet ID (between d/ and /edit in the URL
+RESPONSES_ID = os.getenv('RESPONSES_ID') if not args.test else os.getenv(
+    'TEST_RESPONSES_ID')  # google form speadsheet ID (between d/ and /edit in the URL
 RESPONSES_SHEET = 'Form Responses 1'
-LATE_PASSES_ID = os.getenv('LATE_PASSES_ID') if not args.test else os.getenv('TEST_LATE_PASSES_ID') # google sheet late pass usage ID (between d/ and /edit in the URL)
+LATE_PASSES_ID = os.getenv('LATE_PASSES_ID') if not args.test else os.getenv(
+    'TEST_LATE_PASSES_ID')  # google sheet late pass usage ID (between d/ and /edit in the URL)
 LATE_PASSES_SHEET = 'roster'
 LATE_PASSES_MESSAGE = 'message'
+
 
 def scrape_spreadsheet(id, sheet):
     result = service.spreadsheets().values().get(
@@ -41,10 +45,12 @@ def scrape_spreadsheet(id, sheet):
 
     return result.get('values', [])
 
+
 def format_date(d: datetime.date) -> str:
     day = d.day
     suffix = 'th' if 11 <= day <= 13 else {1: 'st', 2: 'nd', 3: 'rd'}.get(day % 10, 'th')
     return d.strftime(f'%A %B {day}{suffix}')
+
 
 def update_cell(headers, id, sheet, row, col, value):
     col_letter = chr(ord('A') + headers.index(col))
@@ -52,6 +58,7 @@ def update_cell(headers, id, sheet, row, col, value):
     service.spreadsheets().values().update(
         spreadsheetId=id, range=cell_range, valueInputOption="RAW", body={"values": [[value]]}
     ).execute()
+
 
 def main():
     if args.test:
@@ -183,9 +190,14 @@ def main():
                     f"are no longer accepted after Tuesday nights, regardless of any late pass use."
                 )
         else:
-            student["P1"] = hw_code.lower()
-            update_cell(headers, LATE_PASSES_ID, LATE_PASSES_SHEET, student.get("_row_index"), "P1", hw_code.lower())
             if is_duplicate:
+                # Use both late passes on same assignment
+                student["P1"] = hw_code.lower()
+                student["P2"] = hw_code.lower()
+                update_cell(headers, LATE_PASSES_ID, LATE_PASSES_SHEET, student.get("_row_index"), "P1",
+                            hw_code.lower())
+                update_cell(headers, LATE_PASSES_ID, LATE_PASSES_SHEET, student.get("_row_index"), "P2",
+                            hw_code.lower())
                 body = (
                     f"You are receiving this email as confirmation of your late pass usage for {hw_code_with_hash}.\n\n"
                     f"You have used both of your late passes for the quarter on this assignment. If you believe this is in error, please contact your instructor.\n\n"
@@ -194,6 +206,10 @@ def main():
                     f"are no longer accepted after Tuesday nights, regardless of any late pass use."
                 )
             else:
+                # Use only one late pass
+                student["P1"] = hw_code.lower()
+                update_cell(headers, LATE_PASSES_ID, LATE_PASSES_SHEET, student.get("_row_index"), "P1",
+                            hw_code.lower())
                 body = (
                     f"You are receiving this email as confirmation of your late pass usage for {hw_code_with_hash}. You may now submit "
                     f"{hw_code_with_hash} by {format_date(due_date)} at 11:59 PM with no late penalty. You have one late pass remaining, which can be "
@@ -206,7 +222,7 @@ def main():
     receipt = []
 
     if platform.system() == "Windows":
-        outlook = win32com.client.Dispatch("Outlook.Application") # uses existing Outlook session on user's PC
+        outlook = win32com.client.Dispatch("Outlook.Application")  # uses existing Outlook session on user's PC
     for user_id, (subject, content) in messages.items():
         if user_id == "steve.earth":
             email = f"{user_id}@gmail.com"
@@ -235,6 +251,7 @@ def main():
     print("Receipt email sent")
 
     update_cell(headers, LATE_PASSES_ID, LATE_PASSES_SHEET, 2, "other notes", f"last email: {hw_code.lower()}")
+
 
 if __name__ == '__main__':
     main()
